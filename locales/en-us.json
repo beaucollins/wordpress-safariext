@@ -1,0 +1,48 @@
+{
+	"extName": {
+		"message": "WordPress.com Extension"
+	},
+	"extDescription": {
+		"message": "Brings features from WordPress.com to your browser."
+	},
+	"badgeIssue": {
+		"message": "?",
+		"description": "Used in the badge of the browser icon to indicate an issue that the user should resolve."
+	},
+	"genericServerError": {
+		"message": "Unable to communicate with the WordPress.com servers."
+	},
+	"noNotifications": {
+		"message": "No notifications right now."
+	},
+	"follow": {
+		"message": "Follow"
+	},
+	"followingInProgress": {
+		"message": "Following..."
+	},
+	"unfollow": {
+		"message": "Unfollow"
+	},
+	"unfollowingInProgress": {
+		"message": "Unfollowing..."
+	},
+	"loggedOutMessage": {
+		"message": "Sign in to your WordPress.com account to view your notifications, follow sites, and start new blog posts quickly and easily from your browser toolbar."
+	},
+	"signIn": {
+		"message": "Sign In"
+	},
+	"signUp": {
+		"message": "Don't have an account? It just takes a few seconds!"
+	},
+	"blogThisButton": {
+		"message": "Press This"
+	},
+	"notifications": {
+		"message": "Notifications"
+	},
+	"loadingNotifications": {
+		"message": "Loading your notifications..."
+	}
+}

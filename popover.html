@@ -1,0 +1,307 @@
+<html>
+	<head>
+		<link rel="stylesheet" type="text/css" href="skin/notifications.css"/>
+	</head>
+	<body>
+		<div id="wrap">
+			<div id="logged-out" style="display: none;">
+				<p class="i18n" data-key="loggedOutMessage"></p>
+				<p>
+					<a href="http://wordpress.com/wp-login.php?source=chrome-extension" class="button-primary i18n" target="_blank" data-key="signIn"></a>
+					<small><a href="https://en.wordpress.com/signup/?source=chrome-extension" target="_blank" class="i18n" data-key="signUp"></a></small>
+				</p>
+			</div>
+			<div id="logged-in">
+				<div>
+					<div class="header" id="page-title"></div>
+					<div class="actions">
+						<div>
+							<a href="#" id="follow-this" class="i18n" data-key="follow"></a>
+						</div>
+						<div id="wp-admin-bar-press-this">
+							<a href="#" id="press-this" class="i18n" data-key="blogThisButton"></a>
+						</div>
+					</div>
+				</div>
+		
+				<div id="notes-panel">
+					<div id="notes-list">
+						<div class="header i18n" data-key="notifications"></div>
+						<div id="notes-list-container">
+							<div class="notes-panel-header i18n" data-key="loadingNotifications" id="notes-panel-header"></div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<script type="text/javascript" charset="utf-8">
+		
+		var ext = safari.extension.globalPage.contentWindow;
+		ext.localizeDocument( document );
+		var __ = ext.i18n.t;
+		
+		var pressThisButton = document.getElementById( 'press-this' );
+		pressThisButton.addEventListener( 'click', function(e){
+			e.preventDefault();
+			safari.self.hide();
+			var enc = encodeURIComponent;
+			var query = [];
+			for( param in window.share_parameters ){
+				query.push( param + '=' + enc( window.share_parameters[param] ) );
+			}
+			var tab = safari.application.activeBrowserWindow.openTab();
+			tab.url = 'https://postto.wordpress.com?abpost&bid=1&' + query.join( '&' );
+		}, true);
+		
+		var followButton = document.getElementById( 'follow-this' );
+		followButton.addEventListener( 'click', function(e){
+			e.preventDefault();
+			// if we aren't disabled
+			var classes = followButton.classList;
+			
+			// short-circuit if disabled or un/subscribing
+			if ( classes.contains( 'disabled' ) || classes.contains( 'subscribing' ) || classes.contains( 'unsubscribing' ) ) {
+				return;
+			};
+			
+			if ( classes.contains( 'subscribed' ) ) {
+				// let's unfollow
+				classes.add( 'unsubscribing' );
+				followButton.innerText = __( 'unfollowingInProgress' );
+				ext.subscription_list.removeSubscription(
+					window.subscribe_parameters.url,
+					function(){ //success
+						classes.remove( 'unsubscribing');
+						classes.remove( 'subscribed' );
+						followButton.innerText = __( 'follow' );
+					},
+					function( d ){ //failure
+						classes.remove( 'usubscribing ');
+						followButton.innerText = __( 'unfollow' );
+						displayError( d );
+					}
+				);
+			} else {
+				// let's follow
+				classes.add( 'subscribing' );
+				followButton.innerText = __( 'followingInProgress' );
+					
+				ext.subscription_list.addSubscription(
+					window.subscribe_parameters.url,
+					function(){ //success
+						classes.remove( 'subscribing' );
+						classes.add( 'subscribed' );
+						followButton.innerText = __( 'unfollow' );
+					},
+					function( d ){ //failure
+						classes.remove( 'subscribing' );
+						followButton.innerText = __( 'follow' );
+						displayError( d );
+					}
+				);
+			}
+		} );
+		
+		var toggleNotification = function( e ){
+			e.preventDefault();
+			var note = this.parentNode,
+				b = note.querySelector( '.note-body' );
+			
+			var selected = note.classList.contains( 'selected' );
+			// deselect any selected notes
+			Array.prototype.forEach.call( document.querySelectorAll( '.note.selected' ), function( other ){
+				if ( selected || other != note ) {
+					other.classList.remove( 'selected' );
+					other.style.height = note.closedHeight + 'px';
+				};
+			} );
+			
+			if ( !selected ) {
+				note.classList.add( 'selected' );
+				note.style.height = note.openHeight + 'px';
+			};
+			
+		};
+		
+		var openTab = function( e ){
+			e.preventDefault();
+			if ( e.target.href ) {
+				var tab = safari.application.activeBrowserWindow.openTab();
+				tab.url = e.target.href;
+				safari.self.hide();
+			};
+		} 
+		
+		this.displayNotifications = function( notes ){
+			var container = document.getElementById( 'notes-list-container' ),
+				summaries = container.querySelectorAll( '.note-summary' ),
+				bodies = container.querySelectorAll( '.note-body' );
+				
+			Array.prototype.forEach.call( summaries, function( n ){
+				n.removeEventListener( 'click', toggleNotification );
+			} );
+			Array.prototype.forEach.call( bodies, function( n ){
+				n.removeEventListener( 'click', openTab );
+			} );
+			
+			container.innerHTML = "";
+		
+			if ( notes.length > 0 ) {
+				notes.forEach(function(n){
+					var note = document.createElement( 'div' ),
+						summary = document.createElement( 'div' ),
+						icon = document.createElement( 'span' ),
+						iconImage = document.createElement( 'img' ),
+						subject = document.createElement( 'span' ),
+						noteBody = document.createElement( 'div' );
+			
+					note.classList.add( 'note' );
+					note.classList.add( n.unread == "1" ? 'unread' : 'read' );
+					summary.classList.add( 'note-summary' );
+					with( iconImage.style ){
+						width = '24px';
+						height = '24px';
+						overflow = 'hidden';
+						display = 'inline-block';
+					}
+					iconImage.src = n.icon;
+					icon.appendChild( iconImage );
+					icon.classList.add( 'no-grav' );
+					icon.classList.add( 'icon' );
+					summary.appendChild( icon );
+					subject.classList.add( 'note-subject' );
+					subject.innerHTML = n.subject;
+			
+					summary.appendChild( subject );
+					note.appendChild( summary );
+			
+					noteBody.innerHTML = n.body;
+					noteBody.classList.add( 'note-body' );
+					note.appendChild( noteBody );
+			
+					container.appendChild( note );
+					note.note = n;
+					summary.addEventListener( 'click', toggleNotification );
+					noteBody.addEventListener( 'click', openTab );
+						
+					note.openHeight = note.offsetHeight;
+					note.closedHeight = note.offsetHeight - noteBody.offsetHeight;
+					note.style.display = 'none';
+					note.style.height = note.closedHeight + 'px';
+					note.style.display = 'block';
+					setTimeout( function(){
+						note.classList.add( 'ready' );
+					} );
+				});
+			
+			} 
+			
+		}
+		
+		this.share_parameters = {
+			u:'',
+			t:'',
+			s:'',
+			i:''
+		};
+		
+		this.setShareParameters = function( parameters ){
+			window.share_parameters = parameters;
+		};
+		
+		this.setSelection = function( s ){
+			window.share_parameters.s = s;
+		};
+		
+		this.subscribe_parameters = {
+			url:null,
+			subscribed:false
+		};
+		
+		this.setSubscribeParameters = function( parameters ){
+			var a = document.createElement( 'a' ),
+				title = document.getElementById( 'page-title' );
+			window.subscribe_parameters = parameters;
+			title.innerText = parameters.title;
+			a.href = parameters.url;
+			if ( !a.protocol.match(/https?/) ) {
+				followButton.classList.add( 'disabled' );
+			} else {
+				followButton.classList.remove( 'disabled' );
+			}
+			
+			if ( parameters.subscribed ) {
+				followButton.innerText = __( 'unfollow' );
+				followButton.classList.add( 'subscribed' );
+			} else {
+				followButton.innerText = __( 'follow' );
+				followButton.classList.remove( 'subscribed' );
+			}
+		};
+		
+		this.setFeedURL = function( url ){
+			if ( !url && !window.subscribe_parameters.subscribed ) {
+				followButton.classList.add( 'disabled' );
+			} else {
+				followButton.classList.remove( 'disabled' );
+			}
+		}
+		
+		this.setAuthStatus = function( loggedIn ){
+			var loggedInPanel = document.getElementById('logged-in'),
+				loggedOutPanel = document.getElementById('logged-out');
+			if ( !loggedIn ) {
+				loggedInPanel.style.display = 'none';
+				loggedOutPanel.style.display = 'block';
+			} else {
+				loggedInPanel.style.display = 'block';
+				loggedOutPanel.style.display = 'none';
+			}
+		}
+				
+		this.getDimensions = function(){
+			var wrap = document.getElementById( 'wrap' );
+			return {
+				width: wrap.offsetWidth,
+				height: wrap.offsetHeight
+			};
+		}
+		
+		this.displayError = function( msg ){
+			var container = document.querySelector( '#notes-panel' ),
+				errorNode = document.createElement( 'div' ),
+				list = container.querySelector( '#notes-list' );
+			errorNode.classList.add( 'error' );
+						
+			if ( 'object' == typeof msg ) {
+				errorMsg = __( msg.code, msg.message );
+			} else {
+				errorMsg = msg;
+			}
+			errorNode.innerText = errorMsg;
+			
+			clearError();
+			container.insertBefore( errorNode,  list );
+			
+		}
+		
+		this.clearError = function(){
+			var errorNode = document.querySelectorAll( '.error' );
+			Array.prototype.forEach.call( errorNode, function(n){
+				n.parentNode.removeChild( n );
+			} );
+		}
+				
+		var links = document.querySelectorAll( '#logged-out a' );
+		Array.prototype.forEach.call( links, function( link ){
+			link.addEventListener( 'click', function(e){
+				e.preventDefault();
+				safari.self.hide();
+				var t = safari.application.activeBrowserWindow.openTab();
+				t.url = link.href;
+			});
+		} );
+		
+		</script>
+	</body>
+</html>

@@ -1,0 +1,197 @@
+<script type="text/javascript" charset="utf-8" src="lib/wpcom-request.js"></script>
+<script type="text/javascript" charset="utf-8" src="lib/poller.js"></script>
+<script type="text/javascript" charset="utf-8" src="lib/i18n.js"></script>
+<script type="text/javascript" charset="utf-8" src="lib/subscription-list.js"></script>
+<script type="text/javascript" charset="utf-8">
+
+// all XMLHttpRequest go through WPComRequest, so this is a single point to determine if
+// the user is logged in or not.
+WPComRequest.onAuthFailure = function( data ){
+	// we're not logged in
+	setAuthStatus( false );
+};
+
+WPComRequest.onAuthSuccess = function(){
+	// we are logged in
+	setAuthStatus( true );
+}
+		
+// initialize our i18n locale
+var i18n = new I18n( navigator.language, 'en-us' );
+
+// the popover window. there is only ever one
+var popover = safari.extension.popovers[0];
+
+// storing notes in memory
+var notes = JSON.parse( localStorage.notes || "{ notes:[], unread_count:0 }" );
+
+// subscription list
+var subscription_list = this.subscription_list = new SubscriptionList();
+
+
+// set up a Poller to request notes every 5 minutes
+var notifications = new Poller( 'https://public-api.wordpress.com/cookie-auth/notifications/', {
+	onSuccess: function( data, poller ){
+		
+		eachButton( function( button ){
+			button.badge = data.unread_count;
+		} );
+		
+		notes = data;
+		localStorage.notes = JSON.stringify( notes );
+	}
+} );
+
+// set up a Poller to request subscriptions every 60 minutes
+var subscriptions = new Poller( 'https://public-api.wordpress.com/cookie-auth/follow?action=subscriptions', {
+	onSuccess: function( data, poller ){
+		subscription_list.setSubscriptions( data.subscriptions );
+	}
+} );
+
+subscriptions.start( 1000 * 60 * 60 ); // every 60 minutes
+notifications.start( 1000 * 60 * 5 ); // every 5 minutes
+
+// mark each notification as read
+var markNotificationsAsRead = function( notes ){
+	if ( notes.length > 0 ) {
+		var req = new WPComRequest;
+		// pause the poller while we setup the notifications
+		notifications.stop();
+		
+		// mark them read one at a time
+		var markRead = function(){
+			// pull a notification off the array
+			var n = notes.pop();
+			// if it's actually a notification, mark it as read
+			if ( n ) {
+				req.request( 'https://wordpress.com/wp-admin/admin-ajax.php',
+					{ _wpnonce: n.nonce, action: 'notes_mark_as_read', id: n.id, read: 1 }, // request params
+					markRead, // move on to the next unread notification
+					function( data ){
+						throw( "Something is wrong" );
+					}
+				)			
+			} else {
+				// no more notifications to mark as read, let's start polling the notifications again
+				notifications.start();
+			}
+		}
+		// start marking the notifications as read
+		markRead();
+		
+	};
+}
+
+// by default we'll consider ourselves logged out
+var isLoggedIn = false;
+
+// use this method to update if we're logged into WP.com or not
+// when going from logged out to logged in we'll restart the
+// timers for our subscription and notification pollers
+var setAuthStatus = function( loggedIn ){
+	if ( loggedIn === null) { return };
+	if ( loggedIn && !isLoggedIn ) {
+		subscriptions.restart();
+		notifications.restart();
+	};
+	isLoggedIn = loggedIn;
+	popover.contentWindow.setAuthStatus( loggedIn );
+}
+
+// delegates this method to the popover
+var setFeedURL = function( url ){
+	popover.contentWindow.setFeedURL( url );
+}
+
+// When new windows are opened we want to set their toolbar badge counts
+safari.application.addEventListener( 'open', function( e ){
+	eachButton( function(b){
+		b.badge = notes.unread_count;
+	} );
+}, true );
+
+// receive messages from our injected script
+safari.application.addEventListener( 'message', function( e ){
+	switch( e.name ){
+		case 'setSelectedText':
+			if( e.message != "" )
+				popover.contentWindow.setSelection( e.message );
+		break;
+		case 'setAuthStatus':
+			setAuthStatus( e.message );
+		break;
+		case 'setFeedURL':
+			setFeedURL( e.message );
+		break;
+	}
+}, true );
+
+// before dispaying the popover setup the view
+safari.application.addEventListener( "popover", function(e){
+	var w = popover.contentWindow,
+		tab = safari.application.activeBrowserWindow.activeTab;
+	
+	w.clearError();
+	
+	w.setAuthStatus( isLoggedIn );
+	
+	w.displayNotifications( notes.notes );
+	
+	w.setShareParameters( {
+		u: tab.url,
+		t: tab.title
+	} );
+	
+	w.setSubscribeParameters( {
+		url: tab.url,
+		title: tab.title,
+		subscribed: subscription_list.isSubscribedTo( tab.url )
+	} );
+	
+	var size = w.getDimensions();
+	popover.width = size.width;
+	popover.height = size.height;
+	
+	
+	// ask the page for it's highlighted text
+	tab.page.dispatchMessage( 'getSelectedText' )
+	// ask the page for any feed URLs
+	tab.page.dispatchMessage( 'getFeedURL' );
+	
+	// filter the unread notifications and mark them as read
+	markNotificationsAsRead( notes.notes.filter( function( n ){
+		return n.unread == '1';
+	} ) );
+	
+}, true );
+
+
+// convenience method for iterating over each instance
+// of the toolbar button
+function eachButton( callback ){
+	safari.extension.toolbarItems.forEach( callback );
+}
+
+// i18n function for replacing i18n values inside a given DOM
+this.localizeDocument = function( page ) {
+	var forEach = Array.prototype.forEach;
+	// replace all i18n nodes (currently there aren't any)
+	forEach.call( page.querySelectorAll( "i18n" ), function ( node ) {
+		var string = i18n.t( node.attributes["data-key"].value );
+	
+		if ( string ) {
+			node.outerHTML = string;
+		}
+	} );
+	// update the text for each node that hass class of .i18n
+	forEach.call(page.querySelectorAll( ".i18n" ), function ( node ) {
+		var string = i18n.t( node.attributes["data-key"].value );
+		if ( string ) {
+			node.innerText = string;
+		}
+	} );
+}
+
+
+</script>
