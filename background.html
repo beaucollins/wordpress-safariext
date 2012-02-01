@@ -23,7 +23,7 @@ var i18n = new I18n( navigator.language, 'en-us' );
 var popover = safari.extension.popovers[0];
 
 // storing notes in memory
-var notes = JSON.parse( localStorage.notes || "{ notes:[], unread_count:0 }" );
+var notes = JSON.parse( localStorage.notes || "{ \"notes\":[], \"unread_count\":0 }" );
 
 // subscription list
 var subscription_list = this.subscription_list = new SubscriptionList();
