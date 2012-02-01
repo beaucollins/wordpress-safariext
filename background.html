@@ -68,9 +68,7 @@ var markNotificationsAsRead = function( notes ){
 				req.request( 'https://wordpress.com/wp-admin/admin-ajax.php',
 					{ _wpnonce: n.nonce, action: 'notes_mark_as_read', id: n.id, read: 1 }, // request params
 					markRead, // move on to the next unread notification
-					function( data ){
-						throw( "Something is wrong" );
-					}
+					markRead // move on to the next one if there's an error
 				)			
 			} else {
 				// no more notifications to mark as read, let's start polling the notifications again
@@ -163,6 +161,10 @@ safari.application.addEventListener( "popover", function(e){
 	markNotificationsAsRead( notes.notes.filter( function( n ){
 		return n.unread == '1';
 	} ) );
+	
+	eachButton( function(b){
+		b.badge = 0;
+	} );
 	
 }, true );
 
